@@ -5,7 +5,12 @@
 // host_permissions, so no relay through the background worker is needed here.
 
 const BASE_URL = "http://localhost:8000";
+const API_KEY_STORAGE_KEY = "jobfitai_api_key";
 
+const apiKeySection = document.getElementById("apiKeySection");
+const apiKeyInput = document.getElementById("apiKeyInput");
+const saveApiKeyBtn = document.getElementById("saveApiKeyBtn");
+const apiKeyStatusEl = document.getElementById("apiKeyStatus");
 const jobDescriptionEl = document.getElementById("jobDescription");
 const statusEl = document.getElementById("status");
 const errorEl = document.getElementById("error");
@@ -30,6 +35,34 @@ const CATEGORY_LABELS = {
 // Set once we know the URL of the tab the JD came from (LinkedIn flow only);
 // stays null for the manual paste-box flow.
 let jobUrl = null;
+
+// The backend token (see backend's require_api_key), stored in
+// chrome.storage.local so it persists across popup opens/closes — MV3
+// popups are torn down every time they lose focus, so nothing kept only
+// in a JS variable here would survive.
+let apiKey = null;
+
+async function loadApiKey() {
+  const stored = await chrome.storage.local.get(API_KEY_STORAGE_KEY);
+  apiKey = stored[API_KEY_STORAGE_KEY] || null;
+  if (apiKey) {
+    apiKeyInput.value = apiKey;
+  } else {
+    // No key saved yet — expand the section so it's not missed.
+    apiKeySection.open = true;
+  }
+}
+
+async function saveApiKey() {
+  const value = apiKeyInput.value.trim();
+  if (!value) {
+    apiKeyStatusEl.textContent = "Enter a key first.";
+    return;
+  }
+  await chrome.storage.local.set({ [API_KEY_STORAGE_KEY]: value });
+  apiKey = value;
+  apiKeyStatusEl.textContent = "Saved.";
+}
 
 function showError(message) {
   errorEl.textContent = message;
@@ -77,11 +110,15 @@ async function loadScrapedJobDescription() {
 // Shared POST helper: turns network failures and non-2xx responses into a
 // single Error so callers don't each need their own fetch error handling.
 async function postJson(path, body) {
+  if (!apiKey) {
+    throw new Error("Set your backend API key above first.");
+  }
+
   let response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify(body),
     });
   } catch {
@@ -176,5 +213,7 @@ async function copyCoverLetter() {
 analyzeBtn.addEventListener("click", analyze);
 coverLetterBtn.addEventListener("click", generateCoverLetter);
 copyBtn.addEventListener("click", copyCoverLetter);
+saveApiKeyBtn.addEventListener("click", saveApiKey);
 
+loadApiKey();
 loadScrapedJobDescription();

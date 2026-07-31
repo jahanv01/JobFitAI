@@ -14,11 +14,12 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from google import genai
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 import models
 from database import Base, engine, get_db
-from schemas import AnalyzeRequest, MatchResultOut, ProfileIn, ProfileOut
+from schemas import AnalyzeRequest, MatchAnalysisResponse, MatchResultOut, ProfileIn, ProfileOut
 
 # Creates all tables defined in models.py if they don't already exist.
 # There's no migration framework yet — fine at this stage, but any future
@@ -94,10 +95,12 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
 
     Flow: load the stored profile -> fill the prompt template with the
     profile + job description -> call Gemini -> parse its JSON response ->
+    validate that JSON matches the documented match-analysis schema ->
     save it as a MatchResult row -> return it. Any failure along the way
-    (missing profile, LLM/network error, or a response that isn't valid
-    JSON) is turned into a clear HTTP error instead of a raw crash, and
-    nothing is saved to the DB unless the whole flow succeeds.
+    (missing profile, LLM/network error, a response that isn't valid JSON,
+    or valid JSON that doesn't match the expected shape) is turned into a
+    clear HTTP error instead of a raw crash, and nothing is saved to the
+    DB unless the whole flow succeeds.
     """
     profile = db.query(models.Profile).first()
     if not profile:
@@ -134,13 +137,23 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
             detail="LLM returned malformed JSON; could not parse match result.",
         )
 
-    # .get() is used throughout so a response missing an expected field
-    # (e.g. the model forgot "company") degrades to null instead of crashing.
+    # Being valid JSON isn't enough on its own — confirm it actually has
+    # the fields/types promised in prompts/match_analysis.txt (e.g.
+    # category_breakdown present with all four categories, apply_recommendation
+    # a proper {tier, reasoning} object) before persisting anything.
+    try:
+        validated = MatchAnalysisResponse.model_validate(parsed)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM response did not match the expected match-analysis schema: {exc}",
+        )
+
     match_result = models.MatchResult(
-        job_title=parsed.get("job_title"),
-        company=parsed.get("company"),
-        match_pct=parsed.get("overall_match_percentage"),
-        raw_response=parsed,
+        job_title=validated.job_title,
+        company=validated.company,
+        match_pct=validated.overall_match_percentage,
+        raw_response=validated.model_dump(),
     )
     db.add(match_result)
     db.commit()

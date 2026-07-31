@@ -30,9 +30,13 @@ class ProfileOut(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    """Request body for POST /analyze — just the raw job posting text."""
+    """Request body for POST /analyze."""
 
     job_description: str
+    # Set by the Chrome extension when the JD was read from an open
+    # LinkedIn tab (see extension/content-script.js); stored as metadata
+    # alongside the match result, never used to fetch anything server-side.
+    job_url: Optional[str] = None
 
 
 class CategoryScore(BaseModel):
@@ -84,6 +88,7 @@ class MatchResultOut(BaseModel):
     job_title: Optional[str] = None
     company: Optional[str] = None
     match_pct: Optional[int] = None
+    job_url: Optional[str] = None
     raw_response: Optional[dict[str, Any]] = None
     created_at: Optional[datetime] = None
 

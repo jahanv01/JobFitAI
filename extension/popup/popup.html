@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>JobFitAI</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>JobFitAI</h1>
+    </header>
+
+    <p id="status" class="status"></p>
+
+    <textarea
+      id="jobDescription"
+      placeholder="Paste a job description here…"
+      rows="8"
+    ></textarea>
+
+    <div class="actions">
+      <button id="analyzeBtn">Analyze Match</button>
+      <button id="coverLetterBtn">Generate Cover Letter</button>
+    </div>
+
+    <p id="error" class="error" hidden></p>
+
+    <section id="results" hidden>
+      <div class="match-header">
+        <span id="matchPct" class="match-pct"></span>
+        <span id="tierBadge" class="tier-badge"></span>
+      </div>
+      <ul id="categoryBreakdown" class="category-breakdown"></ul>
+    </section>
+
+    <section id="coverLetterSection" hidden>
+      <textarea id="coverLetterText" readonly rows="10"></textarea>
+      <div class="actions">
+        <button id="copyBtn">Copy to Clipboard</button>
+        <span id="copyStatus" class="copy-status"></span>
+      </div>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

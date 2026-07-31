@@ -1,11 +1,12 @@
 # FastAPI application entrypoint. Run locally with:
 #   uvicorn main:app --reload
 # Routes:
-#   GET  /health   - liveness check
-#   POST /profile  - create/update the (single) stored candidate profile
-#   GET  /profile  - fetch the stored profile
-#   POST /analyze  - score the stored profile against a job description
-#                    using the Gemini API, and save the result
+#   GET  /health         - liveness check
+#   POST /profile        - create/update the (single) stored candidate profile
+#   GET  /profile        - fetch the stored profile
+#   POST /analyze        - score the stored profile against a job description
+#                          using the Gemini API, and save the result
+#   POST /cover-letter    - generate a tailored cover letter for a job description
 
 import config  # noqa: F401  (validates required env vars are present on startup)
 
@@ -19,7 +20,15 @@ from sqlalchemy.orm import Session
 
 import models
 from database import Base, engine, get_db
-from schemas import AnalyzeRequest, MatchAnalysisResponse, MatchResultOut, ProfileIn, ProfileOut
+from schemas import (
+    AnalyzeRequest,
+    CoverLetterOut,
+    CoverLetterRequest,
+    MatchAnalysisResponse,
+    MatchResultOut,
+    ProfileIn,
+    ProfileOut,
+)
 
 # Creates all tables defined in models.py if they don't already exist.
 # There's no migration framework yet — fine at this stage, but any future
@@ -29,25 +38,94 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="JobFitAI Backend")
 
-# The prompt template lives outside backend/ so it isn't tied to Python
+# Prompt templates live outside backend/ so they aren't tied to Python
 # specifically and can be reused by other tooling (e.g. the manual test
-# script in scripts/) without importing this module.
-PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "match_analysis.txt"
+# scripts in scripts/) without importing this module.
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+MATCH_PROMPT_PATH = PROMPTS_DIR / "match_analysis.txt"
+COVER_LETTER_PROMPT_PATH = PROMPTS_DIR / "cover_letter.txt"
 GEMINI_MODEL = "gemini-flash-latest"
 
+# Reused across requests rather than constructed per-call.
+_gemini_client = genai.Client(api_key=config.GEMINI_API_KEY)
 
-def _extract_json(text: str) -> dict:
-    """Parse LLM output as JSON, tolerating markdown code fences around it.
 
-    Models are asked to return raw JSON only, but in practice sometimes
-    wrap it in ```json ... ``` fences anyway — this strips those before
-    parsing so callers don't have to deal with it."""
+def _strip_code_fences(text: str) -> str:
+    """Models are asked to return raw output only, but in practice
+    sometimes wrap it in ```json ... ``` (or plain ``` ... ```) fences
+    anyway — this strips those so callers don't have to deal with it."""
     text = text.strip()
     if text.startswith("```"):
         text = text.strip("`").strip()
         if text.lower().startswith("json"):
             text = text[4:].strip()
-    return json.loads(text)
+    return text
+
+
+def _extract_json(text: str) -> dict:
+    """Parse LLM output as JSON, tolerating markdown code fences around it."""
+    return json.loads(_strip_code_fences(text))
+
+
+def _get_stored_profile_text(db: Session) -> str:
+    """Fetch the stored profile and return it as text ready to drop into a
+    prompt template (structured JSON if we have it, otherwise raw text).
+    Raises a 400 if no profile has been stored yet."""
+    profile = db.query(models.Profile).first()
+    if not profile:
+        raise HTTPException(status_code=400, detail="No profile stored yet. POST /profile first.")
+    if profile.structured_json:
+        return json.dumps(profile.structured_json, indent=2)
+    return profile.raw_text or ""
+
+
+def _call_gemini(prompt: str) -> str:
+    """Call the Gemini API and return the raw text response, turning
+    network/API errors into a clear HTTP error instead of a raw crash."""
+    try:
+        response = _gemini_client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+    except Exception as exc:
+        # Network errors, rate limits, invalid API key, etc. all land here.
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}")
+    if not response.text:
+        raise HTTPException(status_code=502, detail="LLM returned an empty response.")
+    return response.text
+
+
+def _run_match_analysis(profile_text: str, job_description: str) -> MatchAnalysisResponse:
+    """Fill prompts/match_analysis.txt, call Gemini, and return a validated
+    MatchAnalysisResponse. Shared by POST /analyze (where this is required)
+    and POST /cover-letter (where it's used best-effort to inform tailoring).
+    Raises HTTPException(502) if the LLM call fails, returns non-JSON, or
+    returns JSON that doesn't match the documented schema."""
+    template = MATCH_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = template.replace("{profile}", profile_text).replace(
+        "{job_description}", job_description
+    )
+    text = _call_gemini(prompt)
+
+    try:
+        parsed = _extract_json(text)
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        # The model didn't return valid JSON (or returned nothing) — this
+        # does happen in practice, so it's handled as a clean 502 rather
+        # than an unhandled exception.
+        raise HTTPException(
+            status_code=502,
+            detail="LLM returned malformed JSON; could not parse match result.",
+        )
+
+    # Being valid JSON isn't enough on its own — confirm it actually has
+    # the fields/types promised in prompts/match_analysis.txt (e.g.
+    # category_breakdown present with all four categories, apply_recommendation
+    # a proper {tier, reasoning} object) before it's used or persisted.
+    try:
+        return MatchAnalysisResponse.model_validate(parsed)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM response did not match the expected match-analysis schema: {exc}",
+        )
 
 
 @app.get("/health")
@@ -102,52 +180,8 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     clear HTTP error instead of a raw crash, and nothing is saved to the
     DB unless the whole flow succeeds.
     """
-    profile = db.query(models.Profile).first()
-    if not profile:
-        raise HTTPException(status_code=400, detail="No profile stored yet. POST /profile first.")
-
-    # Prefer the structured profile if we have one; fall back to raw text
-    # so /analyze still works even before a profile has been structured.
-    profile_text = (
-        json.dumps(profile.structured_json, indent=2)
-        if profile.structured_json
-        else (profile.raw_text or "")
-    )
-
-    template = PROMPT_PATH.read_text(encoding="utf-8")
-    prompt = template.replace("{profile}", profile_text).replace(
-        "{job_description}", request.job_description
-    )
-
-    client = genai.Client(api_key=config.GEMINI_API_KEY)
-    try:
-        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
-    except Exception as exc:
-        # Network errors, rate limits, invalid API key, etc. all land here.
-        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}")
-
-    try:
-        parsed = _extract_json(response.text)
-    except (json.JSONDecodeError, AttributeError, TypeError):
-        # The model didn't return valid JSON (or returned nothing) — this
-        # does happen in practice, so it's handled as a clean 502 rather
-        # than an unhandled exception.
-        raise HTTPException(
-            status_code=502,
-            detail="LLM returned malformed JSON; could not parse match result.",
-        )
-
-    # Being valid JSON isn't enough on its own — confirm it actually has
-    # the fields/types promised in prompts/match_analysis.txt (e.g.
-    # category_breakdown present with all four categories, apply_recommendation
-    # a proper {tier, reasoning} object) before persisting anything.
-    try:
-        validated = MatchAnalysisResponse.model_validate(parsed)
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"LLM response did not match the expected match-analysis schema: {exc}",
-        )
+    profile_text = _get_stored_profile_text(db)
+    validated = _run_match_analysis(profile_text, request.job_description)
 
     match_result = models.MatchResult(
         job_title=validated.job_title,
@@ -159,3 +193,39 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(match_result)
     return match_result
+
+
+@app.post("/cover-letter", response_model=CoverLetterOut)
+def cover_letter(request: CoverLetterRequest, db: Session = Depends(get_db)):
+    """Generate a tailored cover letter for a raw pasted job description.
+
+    Flow: load the stored profile -> best-effort run the same match
+    analysis used by /analyze (to inform which strengths the letter should
+    lead with) -> fill prompts/cover_letter.txt with profile, job
+    description, match analysis (if it succeeded), and an optional tone
+    override -> call Gemini -> return the letter text.
+
+    The match-analysis step is intentionally best-effort here: the cover
+    letter template is written to work without it (see prompts/cover_letter.txt),
+    so a transient LLM failure on that step shouldn't block letter generation
+    entirely — it just means the letter is written without that extra context.
+    """
+    profile_text = _get_stored_profile_text(db)
+
+    match_analysis_text = ""
+    try:
+        validated = _run_match_analysis(profile_text, request.job_description)
+        match_analysis_text = json.dumps(validated.model_dump(), indent=2)
+    except HTTPException:
+        match_analysis_text = ""
+
+    template = COVER_LETTER_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = (
+        template.replace("{profile}", profile_text)
+        .replace("{job_description}", request.job_description)
+        .replace("{match_analysis}", match_analysis_text)
+        .replace("{tone}", request.tone or "")
+    )
+
+    letter = _strip_code_fences(_call_gemini(prompt))
+    return CoverLetterOut(letter=letter)

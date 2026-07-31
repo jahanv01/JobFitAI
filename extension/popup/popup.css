@@ -17,6 +17,40 @@ header h1 {
   font-size: 12px;
 }
 
+.api-key-section {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.api-key-section summary {
+  cursor: pointer;
+  color: #57606a;
+}
+
+.api-key-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.api-key-row input {
+  flex: 1;
+  box-sizing: border-box;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.api-key-row button {
+  flex: none;
+  padding: 4px 10px;
+}
+
+.api-key-status {
+  display: block;
+  margin-top: 4px;
+  color: #1a7f37;
+}
+
 textarea {
   width: 100%;
   box-sizing: border-box;

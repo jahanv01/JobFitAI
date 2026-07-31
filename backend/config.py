@@ -22,3 +22,14 @@ if not GEMINI_API_KEY:
         "Missing API key: set GEMINI_API_KEY in a .env file "
         "at the backend/ directory root (see .env.example)."
     )
+
+# Token clients must send back as the X-API-Key header (see main.py's
+# require_api_key dependency) — separate from GEMINI_API_KEY, which is for
+# calling Gemini, not for authenticating callers of this API.
+API_KEY = os.getenv("API_KEY")
+
+if not API_KEY:
+    raise RuntimeError(
+        "Missing API key: set API_KEY in a .env file "
+        "at the backend/ directory root (see .env.example)."
+    )

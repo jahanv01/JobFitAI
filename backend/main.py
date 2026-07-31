@@ -1,19 +1,23 @@
 # FastAPI application entrypoint. Run locally with:
 #   uvicorn main:app --reload
 # Routes:
-#   GET  /health         - liveness check
+#   GET  /health         - liveness check (no auth — used by load balancers/uptime checks)
 #   POST /profile        - create/update the (single) stored candidate profile
 #   GET  /profile        - fetch the stored profile
 #   POST /analyze        - score the stored profile against a job description
 #                          using the Gemini API, and save the result
 #   POST /cover-letter    - generate a tailored cover letter for a job description
+#
+# All routes except /health require an X-API-Key header matching the
+# configured API_KEY (see require_api_key below) — this is what keeps a
+# deployed instance from being open to the world.
 
 import config  # noqa: F401  (validates required env vars are present on startup)
 
 import json
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from pydantic import ValidationError
@@ -61,6 +65,14 @@ GEMINI_MODEL = "gemini-flash-latest"
 
 # Reused across requests rather than constructed per-call.
 _gemini_client = genai.Client(api_key=config.GEMINI_API_KEY)
+
+
+def require_api_key(x_api_key: str | None = Header(default=None)):
+    """FastAPI dependency guarding every route except /health. Callers
+    (the Chrome extension, or a manual curl/test) must send back the
+    token configured as API_KEY via the X-API-Key header."""
+    if not x_api_key or x_api_key != config.API_KEY:
+        raise HTTPException(status_code=401, detail="Missing or invalid API key.")
 
 
 def _strip_code_fences(text: str) -> str:
@@ -147,7 +159,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/profile", response_model=ProfileOut)
+@app.post("/profile", response_model=ProfileOut, dependencies=[Depends(require_api_key)])
 def upsert_profile(profile: ProfileIn, db: Session = Depends(get_db)):
     """Create the profile if none exists yet, otherwise overwrite the
     existing one. This app intentionally supports only a single profile
@@ -170,7 +182,7 @@ def upsert_profile(profile: ProfileIn, db: Session = Depends(get_db)):
     return existing
 
 
-@app.get("/profile", response_model=ProfileOut)
+@app.get("/profile", response_model=ProfileOut, dependencies=[Depends(require_api_key)])
 def get_profile(db: Session = Depends(get_db)):
     """Fetch the stored profile, or 404 if POST /profile hasn't been
     called yet."""
@@ -180,7 +192,7 @@ def get_profile(db: Session = Depends(get_db)):
     return profile
 
 
-@app.post("/analyze", response_model=MatchResultOut)
+@app.post("/analyze", response_model=MatchResultOut, dependencies=[Depends(require_api_key)])
 def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     """Score the stored profile against a job description.
 
@@ -209,7 +221,7 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     return match_result
 
 
-@app.post("/cover-letter", response_model=CoverLetterOut)
+@app.post("/cover-letter", response_model=CoverLetterOut, dependencies=[Depends(require_api_key)])
 def cover_letter(request: CoverLetterRequest, db: Session = Depends(get_db)):
     """Generate a tailored cover letter for a raw pasted job description.
 

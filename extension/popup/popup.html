@@ -11,15 +11,27 @@
     </header>
 
     <details id="apiKeySection" class="api-key-section">
-      <summary>API Key</summary>
+      <summary>Settings</summary>
+
+      <label class="settings-label" for="backendUrlInput">Backend URL</label>
+      <div class="api-key-row">
+        <input
+          type="text"
+          id="backendUrlInput"
+          placeholder="http://localhost:8000"
+        />
+      </div>
+
+      <label class="settings-label" for="apiKeyInput">API Key</label>
       <div class="api-key-row">
         <input
           type="password"
           id="apiKeyInput"
           placeholder="Paste your backend API key"
         />
-        <button id="saveApiKeyBtn">Save</button>
       </div>
+
+      <button id="saveApiKeyBtn">Save</button>
       <span id="apiKeyStatus" class="api-key-status"></span>
     </details>
 

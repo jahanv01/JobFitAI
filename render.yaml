@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: jobfitai-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # sync: false means Render prompts for these in its dashboard instead
+      # of reading a value from this file — secrets never live in the repo
+      # or the built image, only in Render's own secret store.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: API_KEY
+        sync: false

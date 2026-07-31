@@ -1,0 +1,17 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      # Requires backend/.env to exist locally (see backend/.env.example) —
+      # never baked into the image, only injected at container start.
+      - backend/.env
+    volumes:
+      # Persists the SQLite file across container restarts/rebuilds.
+      - jobfitai-data:/app/backend/data
+
+volumes:
+  jobfitai-data:

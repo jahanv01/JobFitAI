@@ -1,11 +1,19 @@
 # SQLAlchemy setup: the engine/session/Base objects that every model and
-# route in this app shares. jobfitai.db is a local SQLite file created next
-# to wherever the app is run from; it is gitignored and never committed.
+# route in this app shares. The SQLite file lives in data/ (relative to this
+# file, not the CWD) so it's always in a predictable spot regardless of
+# where uvicorn is launched from, and so docker-compose.yml can mount just
+# that directory as a volume without touching application code. It's
+# gitignored and never committed.
+
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./jobfitai.db"
+DATA_DIR = Path(__file__).resolve().parent / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATA_DIR / 'jobfitai.db'}"
 
 # check_same_thread=False is required for SQLite when it's accessed from
 # multiple threads, which FastAPI does by default for sync route handlers.

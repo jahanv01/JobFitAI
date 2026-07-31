@@ -12,19 +12,16 @@
 # configured API_KEY (see require_api_key below) — this is what keeps a
 # deployed instance from being open to the world.
 
-import config  # noqa: F401  (validates required env vars are present on startup)
-
 import json
 from pathlib import Path
 
+import config  # noqa: F401  (validates required env vars are present on startup)
+import models
+from database import Base, engine, get_db
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from pydantic import ValidationError
-from sqlalchemy.orm import Session
-
-import models
-from database import Base, engine, get_db
 from schemas import (
     AnalyzeRequest,
     CoverLetterOut,
@@ -34,6 +31,7 @@ from schemas import (
     ProfileIn,
     ProfileOut,
 )
+from sqlalchemy.orm import Session
 
 # Creates all tables defined in models.py if they don't already exist.
 # There's no migration framework yet — fine at this stage, but any future

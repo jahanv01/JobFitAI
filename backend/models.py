@@ -1,9 +1,8 @@
 # SQLAlchemy ORM models (i.e. the database tables) for this app.
 
-from sqlalchemy import Column, DateTime, Integer, JSON, String, Text
-from sqlalchemy.sql import func
-
 from database import Base
+from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
+from sqlalchemy.sql import func
 
 
 class Profile(Base):

@@ -40,6 +40,12 @@ class MatchResult(Base):
     job_title = Column(String, nullable=True)
     company = Column(String, nullable=True)
     match_pct = Column(Integer, nullable=True)
+    # URL of the job posting tab, set by the Chrome extension when the JD
+    # was read from an open LinkedIn tab (see extension/content-script.js).
+    # This is stored purely as metadata for later reference — the backend
+    # never fetches this URL itself (LinkedIn job pages require a logged-in
+    # session and render client-side, so a plain GET here would be useless).
+    job_url = Column(String, nullable=True)
     # Full parsed JSON response from the LLM (category breakdown,
     # strengths, gaps, apply_recommendation, etc.) — kept in full so
     # nothing has to be recomputed to show a detailed view later.

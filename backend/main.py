@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -37,6 +38,18 @@ from schemas import (
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="JobFitAI Backend")
+
+# The Chrome extension's popup/background pages call this API directly
+# (they're exempt from CORS via the manifest's host_permissions, so this
+# isn't strictly required for the extension itself) — added mainly so this
+# local-only dev backend is also reachable from a plain browser/fetch
+# during testing without CORS getting in the way.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Prompt templates live outside backend/ so they aren't tied to Python
 # specifically and can be reused by other tooling (e.g. the manual test
@@ -187,6 +200,7 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
         job_title=validated.job_title,
         company=validated.company,
         match_pct=validated.overall_match_percentage,
+        job_url=request.job_url,
         raw_response=validated.model_dump(),
     )
     db.add(match_result)

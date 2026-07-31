@@ -1,13 +1,15 @@
 // Popup script. Talks to the content script/background worker to auto-fill
 // a scraped LinkedIn job description (falling back to manual paste), and
-// calls the local backend directly for /analyze and /cover-letter — popup
-// pages are exempt from CORS for origins listed in manifest.json's
+// calls the backend directly for /analyze and /cover-letter — popup pages
+// are exempt from CORS for origins listed in manifest.json's
 // host_permissions, so no relay through the background worker is needed here.
 
-const BASE_URL = "http://localhost:8000";
+const DEFAULT_BASE_URL = "http://localhost:8000";
+const BASE_URL_STORAGE_KEY = "jobfitai_base_url";
 const API_KEY_STORAGE_KEY = "jobfitai_api_key";
 
 const apiKeySection = document.getElementById("apiKeySection");
+const backendUrlInput = document.getElementById("backendUrlInput");
 const apiKeyInput = document.getElementById("apiKeyInput");
 const saveApiKeyBtn = document.getElementById("saveApiKeyBtn");
 const apiKeyStatusEl = document.getElementById("apiKeyStatus");
@@ -36,15 +38,22 @@ const CATEGORY_LABELS = {
 // stays null for the manual paste-box flow.
 let jobUrl = null;
 
-// The backend token (see backend's require_api_key), stored in
-// chrome.storage.local so it persists across popup opens/closes — MV3
+// The backend token (see backend's require_api_key) and the backend's base
+// URL (issue 6.4 — a config flag rather than a hardcoded string, so this
+// same extension build works against localhost during development and a
+// deployed Render URL in production). Both are stored in
+// chrome.storage.local so they persist across popup opens/closes — MV3
 // popups are torn down every time they lose focus, so nothing kept only
 // in a JS variable here would survive.
 let apiKey = null;
+let baseUrl = DEFAULT_BASE_URL;
 
-async function loadApiKey() {
-  const stored = await chrome.storage.local.get(API_KEY_STORAGE_KEY);
+async function loadSettings() {
+  const stored = await chrome.storage.local.get([API_KEY_STORAGE_KEY, BASE_URL_STORAGE_KEY]);
   apiKey = stored[API_KEY_STORAGE_KEY] || null;
+  baseUrl = stored[BASE_URL_STORAGE_KEY] || DEFAULT_BASE_URL;
+
+  backendUrlInput.value = baseUrl;
   if (apiKey) {
     apiKeyInput.value = apiKey;
   } else {
@@ -53,14 +62,20 @@ async function loadApiKey() {
   }
 }
 
-async function saveApiKey() {
-  const value = apiKeyInput.value.trim();
-  if (!value) {
-    apiKeyStatusEl.textContent = "Enter a key first.";
+async function saveSettings() {
+  const urlValue = backendUrlInput.value.trim().replace(/\/+$/, "") || DEFAULT_BASE_URL;
+  const keyValue = apiKeyInput.value.trim();
+  if (!keyValue) {
+    apiKeyStatusEl.textContent = "Enter an API key first.";
     return;
   }
-  await chrome.storage.local.set({ [API_KEY_STORAGE_KEY]: value });
-  apiKey = value;
+  await chrome.storage.local.set({
+    [BASE_URL_STORAGE_KEY]: urlValue,
+    [API_KEY_STORAGE_KEY]: keyValue,
+  });
+  baseUrl = urlValue;
+  apiKey = keyValue;
+  backendUrlInput.value = urlValue;
   apiKeyStatusEl.textContent = "Saved.";
 }
 
@@ -116,13 +131,13 @@ async function postJson(path, body) {
 
   let response;
   try {
-    response = await fetch(`${BASE_URL}${path}`, {
+    response = await fetch(`${baseUrl}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error("Could not reach the JobFitAI backend. Is it running on localhost:8000?");
+    throw new Error(`Could not reach the JobFitAI backend at ${baseUrl}. Is it running?`);
   }
 
   let data = null;
@@ -213,7 +228,7 @@ async function copyCoverLetter() {
 analyzeBtn.addEventListener("click", analyze);
 coverLetterBtn.addEventListener("click", generateCoverLetter);
 copyBtn.addEventListener("click", copyCoverLetter);
-saveApiKeyBtn.addEventListener("click", saveApiKey);
+saveApiKeyBtn.addEventListener("click", saveSettings);
 
-loadApiKey();
+loadSettings();
 loadScrapedJobDescription();

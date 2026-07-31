@@ -1,0 +1,48 @@
+# Deploy-on-merge (issue 6.3's "on merge to main: deploy automatically")
+# is handled natively by Render's Auto-Deploy, triggered by its own GitHub
+# integration on every push to main — see docs/deployment.md. There's
+# deliberately no deploy job here: a PR should never be able to trigger a
+# production deploy just by existing, and Render already watches main
+# directly, so a duplicate deploy step here would just be redundant.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements-dev.txt
+      - run: ruff check backend/
+
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy values so config.py's fail-fast checks and main.py's
+      # genai.Client construction don't crash test collection — no real
+      # Gemini call is made by anything in backend/tests/.
+      GEMINI_API_KEY: test-dummy-key
+      API_KEY: test-dummy-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements-dev.txt
+      - working-directory: backend
+        run: python -m pytest tests/ -v
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t jobfitai-api .

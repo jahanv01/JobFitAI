@@ -27,10 +27,16 @@ header h1 {
   color: #57606a;
 }
 
+.settings-label {
+  display: block;
+  margin-top: 6px;
+  color: #57606a;
+}
+
 .api-key-row {
   display: flex;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .api-key-row input {
@@ -40,14 +46,13 @@ header h1 {
   padding: 4px 6px;
 }
 
-.api-key-row button {
-  flex: none;
+#saveApiKeyBtn {
+  margin-top: 6px;
   padding: 4px 10px;
 }
 
 .api-key-status {
-  display: block;
-  margin-top: 4px;
+  margin-left: 6px;
   color: #1a7f37;
 }
 

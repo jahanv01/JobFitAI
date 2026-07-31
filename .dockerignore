@@ -1,0 +1,15 @@
+# Never bake secrets or local dev state into the image.
+backend/.env
+backend/.venv
+backend/data
+backend/__pycache__
+backend/**/__pycache__
+backend/job.txt
+backend/server.log
+backend/cover_letter_out.txt
+
+extension
+docs
+.git
+.github
+*.md

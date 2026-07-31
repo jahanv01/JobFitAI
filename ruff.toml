@@ -1,0 +1,12 @@
+target-version = "py312"
+line-length = 100
+
+extend-exclude = ["backend/.venv", "backend/data"]
+
+[lint]
+# E/F: pycodestyle errors + pyflakes (undefined names, unused imports, etc).
+# I: import sorting.
+# Deliberately not enabling flake8-bugbear (B) — its B008 rule flags
+# FastAPI's `= Depends(...)` default-argument pattern as a bug, but that's
+# the required, idiomatic way to declare a FastAPI dependency.
+select = ["E", "F", "I"]

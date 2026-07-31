@@ -49,6 +49,17 @@ push to `main` triggers a new build and deploy automatically, with no extra
 CI step needed. Check this under the service's **Settings** tab if you want
 to confirm or change it.
 
+**If the very first deploy fails with `we don't have access to your repo,
+but we'll try to clone it anyway`**, and Auto-Deploy never seems to fire on
+later pushes even though the repo shows up fine under **Account Settings →
+Git Deployment Credentials → Options**: this looks like a one-time hiccup
+in Render's GitHub connection propagating right after the account/repo was
+first linked, rather than a lasting permissions problem. Trigger one
+**Manual Deploy** (top of the service page) to get past it — once that
+succeeds, Auto-Deploy on subsequent pushes should work normally. If it
+still doesn't, revoking and re-adding the credential under Git Deployment
+Credentials forces Render to re-establish the connection from scratch.
+
 ## Free tier notes
 
 - **Cold starts**: Render's free plan spins the service down after ~15

@@ -86,3 +86,18 @@ class MatchResultOut(BaseModel):
     match_pct: Optional[int] = None
     raw_response: Optional[dict[str, Any]] = None
     created_at: Optional[datetime] = None
+
+
+class CoverLetterRequest(BaseModel):
+    """Request body for POST /cover-letter. tone is an optional override —
+    if omitted, the prompt falls back to the profile's own ai_instructions
+    style, or a sensible default (see prompts/cover_letter.txt)."""
+
+    job_description: str
+    tone: Optional[str] = None
+
+
+class CoverLetterOut(BaseModel):
+    """Response body for POST /cover-letter — just the finished letter text."""
+
+    letter: str

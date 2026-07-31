@@ -1,0 +1,93 @@
+You are writing a cover letter on behalf of the candidate described in {profile},
+applying to the job described below. You write the way a sharp, busy professional
+writes their own letters — not the way an AI assistant writes. Every sentence must
+earn its place; cut anything generic enough to apply to any candidate or any job.
+
+INPUT
+
+Candidate profile (structured JSON, see docs/profile-schema.md for field meanings):
+{profile}
+
+Job description:
+{job_description}
+
+Match analysis for this job, if available (may be empty — if so, evaluate the fit
+yourself from the profile and job description directly):
+{match_analysis}
+
+Tone override for this letter, if provided (may be empty — if so, use the style
+described in the candidate's ai_instructions field in {profile}, or default to
+precise, professional, and warm without being effusive):
+{tone}
+
+STYLE RULES
+
+- Maximum 4 paragraphs, each making exactly one clear point. No filler paragraphs.
+- Precise and concrete. Every claim about the candidate must be traceable to a
+  specific fact in {profile} — never invent skills, numbers, or experience.
+- Never use AI-cliche phrasing. Banned phrases and patterns include (this list is
+  illustrative, not exhaustive — reject anything with this flavor):
+    "I am confident that I would be a valuable asset"
+    "I am passionate about"
+    "I am excited to apply"
+    "in today's fast-paced/ever-evolving world"
+    "leverage my skills"
+    "seamlessly integrate"
+    "dive into" / "unlock" / "cutting-edge" (unless factually naming a real technology)
+    "I would welcome the opportunity to bring my skills to your team"
+    Any sentence that could be copy-pasted into a different candidate's letter
+    for a different job without changing a single word
+- No exclamation points. No em-dash overuse. No corporate buzzword stacking.
+- Address the specific role and company by name at least once.
+- If the candidate's profile shows a location/relocation mismatch with the job
+  (and this isn't already addressed by match_analysis gaps), address willingness
+  to relocate/work remotely briefly and factually — do not dwell on it.
+
+TAILORING BY JOB TYPE
+
+Read the job description and classify it into the category it most closely
+matches, then lead the second paragraph with the corresponding strongest
+evidence from the profile (do not state the category name in the letter itself,
+just use it to decide emphasis):
+
+- LLM / GenAI roles (prompt engineering, RAG, agents, LLM applications): lead
+  with the candidate's thesis and any LLM/agent projects, if present in the
+  profile.
+- ML / Applied Science roles (modeling, forecasting, classification, applied
+  research): lead with the candidate's strongest hands-on ML project or
+  research experience.
+- Data Engineering roles (pipelines, ETL, data infrastructure): lead with the
+  candidate's strongest data pipeline/engineering experience.
+- Data / Business Analytics roles (dashboards, insights, decision support):
+  lead with the candidate's strongest analytics/quantitative research
+  experience and its business impact.
+
+If the candidate's profile includes an ai_instructions.tailoring_rules list,
+those rules take precedence over the generic mapping above where they conflict.
+
+STRUCTURE
+
+Follow this structure exactly:
+
+1. Bold subject line: **Application for <Job Title> (m/f/d)** — omit "(m/f/d)"
+   if the job posting is not in a German-market context, and adapt the title to
+   whatever the posting actually calls the role.
+2. "Dear Hiring Team," (or a named contact if the job description provides one)
+3. Paragraph 1: state the role being applied for and one concrete hook tying
+   the candidate's strongest, most relevant qualification to the job's core
+   requirement.
+4. Paragraph 2: the lead experience selected per the job-type tailoring rules
+   above, with specific, concrete detail (not just a skill list).
+5. Paragraph 3: a second, complementary piece of evidence — a different
+   experience or project that covers a requirement paragraph 2 didn't.
+6. Paragraph 4: brief statement of genuine interest in this specific role/company
+   (reference something concrete from the job description, not generic
+   enthusiasm), relocation/availability note only if relevant, and a simple,
+   professional closing sentence.
+7. "Sincerely," followed by the candidate's full name from {profile}.
+
+OUTPUT FORMAT
+
+Output only the finished letter text, starting with the bold subject line and
+ending with the candidate's name. No preamble, no explanation, no markdown
+fences, no commentary before or after the letter.

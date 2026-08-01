@@ -1,8 +1,16 @@
-// Popup script. Talks to the content script/background worker to auto-fill
-// a scraped LinkedIn job description (falling back to manual paste), and
-// calls the backend directly for /analyze and /cover-letter — popup pages
-// are exempt from CORS for origins listed in manifest.json's
-// host_permissions, so no relay through the background worker is needed here.
+// Popup script. On Analyze/Generate Cover Letter, if the job description
+// box is empty, injects content-script.js into the active tab on demand
+// (chrome.scripting.executeScript, via the activeTab permission) to scrape
+// whatever job posting is currently on screen — LinkedIn or otherwise —
+// falling back to manual paste if nothing job-related is found there.
+// Deliberately does NOT scrape on popup open: the generic (non-LinkedIn)
+// extraction heuristic is less reliable than LinkedIn's specific one, so
+// scraping is tied to an explicit action instead of firing silently
+// every time the popup happens to be opened.
+//
+// Also calls the backend directly for /analyze and /cover-letter — popup
+// pages are exempt from CORS for origins listed in manifest.json's
+// host_permissions.
 
 const DEFAULT_BASE_URL = "http://localhost:8000";
 const BASE_URL_STORAGE_KEY = "jobfitai_base_url";
@@ -34,8 +42,8 @@ const CATEGORY_LABELS = {
   experience: "Experience",
 };
 
-// Set once we know the URL of the tab the JD came from (LinkedIn flow only);
-// stays null for the manual paste-box flow.
+// Set once a scrape succeeds, to whatever tab it came from; stays null for
+// the manual paste-box flow.
 let jobUrl = null;
 
 // The backend token (see backend's require_api_key) and the backend's base
@@ -100,26 +108,34 @@ function clearBusy(button) {
   if (button.dataset.originalLabel) button.textContent = button.dataset.originalLabel;
 }
 
-// Fills the paste-box automatically if the content script (relayed through
-// the background worker) found a job description on the active tab; if not
-// (non-LinkedIn tab, page not loaded yet, LinkedIn changed their markup),
-// this just leaves the box empty for manual paste — issue 4.2a's flow.
-async function loadScrapedJobDescription() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) {
-    statusEl.textContent = "Paste a job description below.";
-    return;
-  }
+// If the job description box already has text (manual paste, or a scrape
+// from earlier in this same popup session), this never overwrites it —
+// only attempts a scrape when the box is empty. Returns true once the box
+// has content one way or another, false if nothing was found (caller shows
+// the "paste a job description" error in that case).
+async function ensureJobDescription() {
+  if (jobDescriptionEl.value.trim()) return true;
 
-  chrome.runtime.sendMessage({ type: "GET_SCRAPED_JOB", tabId: tab.id }, (cached) => {
-    if (chrome.runtime.lastError || !cached?.jobDescription) {
-      statusEl.textContent = "Paste a job description below.";
-      return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return false;
+
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["content-script.js"],
+    });
+    if (result?.jobDescription) {
+      jobDescriptionEl.value = result.jobDescription;
+      jobUrl = result.jobUrl || tab.url || null;
+      statusEl.textContent = "Scanned from the current page.";
+      return true;
     }
-    jobDescriptionEl.value = cached.jobDescription;
-    jobUrl = cached.jobUrl || tab.url || null;
-    statusEl.textContent = "Auto-filled from the open LinkedIn job posting.";
-  });
+  } catch {
+    // Injection can fail on pages Chrome restricts extensions from
+    // touching (chrome:// URLs, the Web Store, etc.) — treat the same as
+    // "nothing found" rather than surfacing a raw error.
+  }
+  return false;
 }
 
 // Shared POST helper: turns network failures and non-2xx responses into a
@@ -173,8 +189,11 @@ function renderResults(data) {
 
 async function analyze() {
   clearError();
-  const jobDescription = jobDescriptionEl.value.trim();
-  if (!jobDescription) {
+
+  setBusy(analyzeBtn, "Scanning page…");
+  const found = await ensureJobDescription();
+  if (!found) {
+    clearBusy(analyzeBtn);
     showError("Paste or auto-fill a job description first.");
     return;
   }
@@ -183,7 +202,10 @@ async function analyze() {
   resultsEl.hidden = true;
 
   try {
-    const data = await postJson("/analyze", { job_description: jobDescription, job_url: jobUrl });
+    const data = await postJson("/analyze", {
+      job_description: jobDescriptionEl.value.trim(),
+      job_url: jobUrl,
+    });
     renderResults(data);
   } catch (err) {
     showError(err.message);
@@ -194,8 +216,11 @@ async function analyze() {
 
 async function generateCoverLetter() {
   clearError();
-  const jobDescription = jobDescriptionEl.value.trim();
-  if (!jobDescription) {
+
+  setBusy(coverLetterBtn, "Scanning page…");
+  const found = await ensureJobDescription();
+  if (!found) {
+    clearBusy(coverLetterBtn);
     showError("Paste or auto-fill a job description first.");
     return;
   }
@@ -205,7 +230,7 @@ async function generateCoverLetter() {
   copyStatusEl.textContent = "";
 
   try {
-    const data = await postJson("/cover-letter", { job_description: jobDescription });
+    const data = await postJson("/cover-letter", { job_description: jobDescriptionEl.value.trim() });
     coverLetterTextEl.value = data.letter;
     coverLetterSectionEl.hidden = false;
   } catch (err) {
@@ -230,5 +255,6 @@ coverLetterBtn.addEventListener("click", generateCoverLetter);
 copyBtn.addEventListener("click", copyCoverLetter);
 saveApiKeyBtn.addEventListener("click", saveSettings);
 
+statusEl.textContent =
+  "Paste a job description, or click Analyze/Generate Cover Letter on a job posting page to scan it automatically.";
 loadSettings();
-loadScrapedJobDescription();

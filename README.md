@@ -5,13 +5,8 @@
 [![CI](https://github.com/jahanv01/JobFitAI/actions/workflows/ci.yml/badge.svg)](https://github.com/jahanv01/JobFitAI/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<!--
-  Add a screenshot or short GIF of the extension in action here.
-  Save the image to docs/screenshots/demo.png (create the folder if it
-  doesn't exist yet) and it will render below.
--->
 <p align="center">
-  <img src="docs/screenshots/demo.png" alt="JobFitAI extension popup showing a match score, category breakdown, and a generated cover letter" width="720">
+  <img src="docs/screenshots/get-score-job-match.png" alt="JobFitAI extension popup on a LinkedIn job posting, showing an 80% match score with a category breakdown for education, programming, AI/ML, and experience" width="720">
 </p>
 
 ---
@@ -40,6 +35,31 @@ No more re-explaining your background to an AI chat window for every single post
 - 🗂️ **Match history** — every analysis is saved server-side, so the data exists for a future dashboard.
 - 🔒 **API-key protected backend** — safe to deploy publicly without leaving it open to the world.
 - 🐳 **Containerized and CI-tested** — Docker Compose for local dev, GitHub Actions running lint + tests + a build check on every change, deployed to Render.
+
+## See It In Action
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/generate-coverletter.png" alt="JobFitAI generating a tailored cover letter on a LinkedIn job posting, with a Copy to Clipboard button">
+      <p align="center"><em>Tailored cover letters, one click away from the job posting.</em></p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/apply-same-job-from-careerpage.png" alt="JobFitAI scraping and analyzing a job description directly from a company's own careers page, not LinkedIn">
+      <p align="center"><em>Works on a company's own careers page too — not just LinkedIn.</em></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/get-same-score-for-same-job-from-careerpage.png" alt="The same job posting scored consistently at 80% match whether read from LinkedIn or the company's careers page">
+      <p align="center"><em>Same job, same ~80% match — whether it's read from LinkedIn or the employer's own site.</em></p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/not-worked-on-generic-page.png" alt="JobFitAI correctly declining to scrape a Wikipedia article, showing a 'Paste or auto-fill a job description first' message instead of a false match">
+      <p align="center"><em>The keyword-gate heuristic at work: on a non-job page (Wikipedia here), it correctly declines instead of scraping something meaningless.</em></p>
+    </td>
+  </tr>
+</table>
 
 ## System Architecture
 

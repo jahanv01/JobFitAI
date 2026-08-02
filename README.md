@@ -17,11 +17,11 @@ Applying to jobs at scale means doing the same manual analysis over and over: op
 
 ## The Solution
 
-JobFitAI turns that manual workflow into a single click. A Chrome extension reads the job description directly from whatever page you're on — a LinkedIn posting, an Indeed listing, or a company's own careers page — sends it to a backend that already knows your profile (education, skills, projects, experience, thesis/research, certifications), and returns:
+JobFitAI turns that manual workflow into a single click. A Chrome extension reads the job description directly from whatever page you're on — a LinkedIn posting, an Indeed listing, or a company's own careers page which sends it to a backend that already knows your profile (education, skills, projects, experience, thesis/research, certifications), and returns:
 
 - An **overall match percentage**, broken down by category (education, programming, AI/ML, experience)
 - **Strengths and gaps** for that specific role, plus an apply/skip recommendation
-- A **tailored cover letter**, written to lead with whichever part of your background is most relevant to that particular job — copy-pasted straight into the application form
+- A **tailored cover letter**, written to lead with whichever part of your background is most relevant to that particular job which is copy-pasted straight into the application form
 
 No more re-explaining your background to an AI chat window for every single posting.
 
